@@ -9,7 +9,7 @@
   spec.license      = "MIT"
   spec.author             = { "tarunmkrishna2712" => "tkrishna@tataunistore.com" }
   spec.platform     = :ios, "14.0"
-  spec.source       = { :git => "https://github.com/tarunmkrishna2712/ForceUpdate.git", :tag => spec.version.to_s }
+  spec.source       = { :path => '.' }
   spec.source_files  = "ForceUpdate/**/*.{swift}"
   spec.swift_versions = "5.0"
   spec.framework      = 'UIKit'

@@ -13,10 +13,11 @@ enum ForceUpdateType {
     case na
 }
 
-struct TCForceUpdateAlert {
+public class TCForceUpdateAlert {
+    static let sharedSDK = ForceUpdate.TCForceUpdateAlert()
     var updateType: ForceUpdateType = .na
     
-    mutating func determineForceUpdate(versions: [String], currentVersion: String) -> ForceUpdateType {
+    func determineForceUpdate(versions: [String], currentVersion: String) -> ForceUpdateType {
         if currentVersion == "a" {
             updateType = .forceUpdate
         } else if currentVersion == "b" {

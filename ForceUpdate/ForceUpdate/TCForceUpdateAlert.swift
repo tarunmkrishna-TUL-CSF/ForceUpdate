@@ -27,7 +27,7 @@ struct TCForceUpdateAlert {
         return updateType
     }
     
-    private func showForceUpdateAlert(appName: String, updateURL: String) -> UIAlertController {
+    func showForceUpdateAlert(appName: String, updateURL: String) -> UIAlertController {
         let alert = UIAlertController(title: "Update Alert!", message: "\(appName) has new release 🔔🔔, please update to explore latest changes", preferredStyle: .alert)
         if updateType == .softNudge {
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))

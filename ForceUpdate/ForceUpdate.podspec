@@ -12,4 +12,5 @@
   spec.source       = { :git => "https://github.com/tarunmkrishna2712/ForceUpdate.git", :tag => spec.version.to_s }
   spec.source_files  = "ForceUpdate/**/*.{swift}"
   spec.swift_versions = "5.0"
+  spec.framework      = 'UIKit'
 end

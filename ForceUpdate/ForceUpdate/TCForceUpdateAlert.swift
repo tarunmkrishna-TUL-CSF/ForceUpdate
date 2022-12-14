@@ -34,9 +34,9 @@ struct TCForceUpdateAlert {
         }
         alert.addAction(UIAlertAction(title: "Update", style: .default, handler: { _ in
             print("Alert updated")
-//            if let appURL = URL(string: updateURL) {
-//                UIApplication.shared.open(appURL)
-//            }
+            if let appURL = URL(string: updateURL) {
+                UIApplication.shared.open(appURL)
+            }
         }))
         return alert
     }

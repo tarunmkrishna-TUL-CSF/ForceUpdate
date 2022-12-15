@@ -7,28 +7,25 @@
 
 import UIKit
 
-enum ForceUpdateType {
+public enum ForceUpdateType {
     case forceUpdate
     case softNudge
     case na
 }
 
 public class TCForceUpdateAlert {
-    static let sharedSDK = ForceUpdate.TCForceUpdateAlert()
-    var updateType: ForceUpdateType = .na
+    public static let sharedSDK = ForceUpdate.TCForceUpdateAlert()
     
-    func determineForceUpdate(versions: [String], currentVersion: String) -> ForceUpdateType {
+    public func determineForceUpdate(versions: [String], currentVersion: String) -> ForceUpdateType {
         if currentVersion == "a" {
-            updateType = .forceUpdate
+            return .forceUpdate
         } else if currentVersion == "b" {
-            updateType = .softNudge
-        } else {
-            updateType = .na
+            return .softNudge
         }
-        return updateType
+        return .na
     }
     
-    func showForceUpdateAlert(appName: String, updateURL: String) -> UIAlertController {
+    public func showForceUpdateAlert(appName: String, updateURL: String, updateType: ForceUpdateType) -> UIAlertController {
         let alert = UIAlertController(title: "Update Alert!", message: "\(appName) has new release 🔔🔔, please update to explore latest changes", preferredStyle: .alert)
         if updateType == .softNudge {
             alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))

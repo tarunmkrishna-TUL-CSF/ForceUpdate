@@ -16,14 +16,22 @@ public enum ForceUpdateType {
 public class TCForceUpdateAlert {
     public static let sharedSDK = ForceUpdate.TCForceUpdateAlert()
     public var forceUpdateModel: ForceUpdateVersionModel?
+    private var elapsedDays: Double = 0.0
+    private var isSoftNudgeDisplay: Bool = false
+    private var appCurrentVersion: String?
     
     /// Check if updates are available
     /// - Parameters:
     ///   - bundleId: app bundleId
     ///   - currentVersion: current App version
     ///   - completion: to determine type to update based on flag
-    public func appUpdateAvailable(bundleId: String, currentVersion: String, completion: @escaping (Bool?, Error?) -> Void) {
+    public func appUpdateAvailable(
+        bundleId: String,
+        currentVersion: String,
+        completion: @escaping (Bool?, Error?) -> Void
+    ) {
         let appStoreUrl = "http://itunes.apple.com/lookup?bundleId=\(bundleId)"
+        appCurrentVersion = currentVersion
         if let appUrl = URL(string: appStoreUrl) {
             let request = URLRequest(url: appUrl, cachePolicy: .reloadIgnoringLocalCacheData)
             let task = URLSession.shared.dataTask(with: request) { data, response, error in
@@ -47,17 +55,25 @@ public class TCForceUpdateAlert {
     ///   - currentVersion: current App version
     ///   - timeStamp: previously viewed time should be in 'timeIntervalSince1970'
     /// - Returns: update type
-    public func determineForceUpdate(updateModel: ForceUpdateVersionModel, currentVersion: String, timeStamp: TimeInterval) -> ForceUpdateType {
+    public func determineForceUpdate(
+        updateModel: ForceUpdateVersionModel,
+        timeStamp: TimeInterval?
+    ) -> ForceUpdateType {
         forceUpdateModel = updateModel
+        
         let forceUpdateVersions = forceUpdateModel?.forceUpdate.version
         let softNudges = forceUpdateModel?.flexibleUpdate.version
         let currentTime = Date().timeIntervalSince1970
-        let elapsedDays = Double((currentTime - timeStamp)/86400)
         
-        let isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? 0.0) < elapsedDays
-        if (forceUpdateVersions?.contains(currentVersion) ?? false) {
+        if let timeStamp = timeStamp {
+            elapsedDays = Double((currentTime - timeStamp)/86400)
+            isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? 0.0) < elapsedDays
+        } else {
+            isSoftNudgeDisplay = true
+        }
+        if (forceUpdateVersions?.contains(appCurrentVersion ?? "") ?? false) {
             return .forceUpdate
-        } else if (softNudges?.contains(currentVersion) ?? false), isSoftNudgeDisplay {
+        } else if (softNudges?.contains(appCurrentVersion ?? "") ?? false), isSoftNudgeDisplay {
             return .softNudge
         } else {
             return .na
@@ -69,7 +85,10 @@ public class TCForceUpdateAlert {
     ///   - updateURL: AppStore URL
     ///   - updateType: updateType to configure View
     /// - Returns: UIAlertController
-    public func showForceUpdateAlert(updateURL: String, updateType: ForceUpdateType) -> UIAlertController {
+    public func showForceUpdateAlert(
+        updateURL: String,
+        updateType: ForceUpdateType
+    ) -> UIAlertController {
         let alertConfig = configureTitleDescription(updateType: updateType)
         let alert = UIAlertController(title: alertConfig.0 , message: alertConfig.1, preferredStyle: .alert)
         if updateType == .softNudge {

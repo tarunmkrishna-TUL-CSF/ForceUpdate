@@ -9,12 +9,14 @@
 /* Begin PBXBuildFile section */
 		7ED5B3DF2949B93800891038 /* ForceUpdate.h in Headers */ = {isa = PBXBuildFile; fileRef = 7ED5B3DE2949B93800891038 /* ForceUpdate.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		7ED5B3E62949C16A00891038 /* TCForceUpdateAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ED5B3E52949C16A00891038 /* TCForceUpdateAlert.swift */; };
+		7EF7076E294AFD9300E9BEEE /* ForceUpdateVersionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EF7076D294AFD9300E9BEEE /* ForceUpdateVersionModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		7ED5B3DB2949B93800891038 /* ForceUpdate.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = ForceUpdate.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		7ED5B3DE2949B93800891038 /* ForceUpdate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ForceUpdate.h; sourceTree = "<group>"; };
 		7ED5B3E52949C16A00891038 /* TCForceUpdateAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TCForceUpdateAlert.swift; sourceTree = "<group>"; };
+		7EF7076D294AFD9300E9BEEE /* ForceUpdateVersionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForceUpdateVersionModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,6 +51,7 @@
 			children = (
 				7ED5B3DE2949B93800891038 /* ForceUpdate.h */,
 				7ED5B3E52949C16A00891038 /* TCForceUpdateAlert.swift */,
+				7EF7076D294AFD9300E9BEEE /* ForceUpdateVersionModel.swift */,
 			);
 			path = ForceUpdate;
 			sourceTree = "<group>";
@@ -134,6 +137,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7ED5B3E62949C16A00891038 /* TCForceUpdateAlert.swift in Sources */,
+				7EF7076E294AFD9300E9BEEE /* ForceUpdateVersionModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

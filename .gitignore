@@ -33,7 +33,4 @@ Podfile.lock
 
 vendor
 
-TataCliqSwift.xcodeproj
-TataCliqSwift.xcworkspace
-
 fastlane/report.xml

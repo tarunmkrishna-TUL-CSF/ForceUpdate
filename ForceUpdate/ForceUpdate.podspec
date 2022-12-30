@@ -1,7 +1,7 @@
  Pod::Spec.new do |spec|
  
   spec.name         = "ForceUpdate"
-  spec.version      = "1.0.5"
+  spec.version      = "1.0.7"
   spec.summary      = "Alert for force update for users."
   spec.description  = "Framework to determine and forceupdate the Application for users"
   

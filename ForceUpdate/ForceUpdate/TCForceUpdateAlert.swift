@@ -126,7 +126,7 @@ public class TCForceUpdateAlert {
             }
         }))
         
-        var rootVC = UIApplication.shared.windows.first?.rootViewController
+        let rootVC = UIApplication.shared.windows.first?.rootViewController
         DispatchQueue.main.async {
             rootVC?.present(alert, animated: true)
         }

@@ -10,6 +10,7 @@ import Foundation
 public struct ForceUpdateVersionModel: Codable {
     public let forceUpdate: ForceUpdateUser
     public let flexibleUpdate: FlexibleUpdateUser
+    public let regularUpdate: RegularUpdate
 }
 
 public struct ForceUpdateUser: Codable {
@@ -22,5 +23,11 @@ public struct FlexibleUpdateUser: Codable {
     public let title: String?
     public let description: String?
     public let version: [String]?
+    public let recurrenceInterval: Double?
+}
+
+public struct RegularUpdate: Codable {
+    public let title: String?
+    public let description: String?
     public let recurrenceInterval: Double?
 }

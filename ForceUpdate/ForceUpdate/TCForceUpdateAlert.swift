@@ -10,110 +10,146 @@ import UIKit
 public enum ForceUpdateType {
     case forceUpdate
     case softNudge
+    case regularUpdate
     case na
+}
+
+struct TCForceUpdateAlertConstant {
+    static let title = "Please Update your app."
+    static let description = "Critical update has been released."
+    static let cancel = "Cancel"
+    static let update = "Update"
+    static let timeStampDefaultsKey = "nudgesTimeStamp"
 }
 
 public class TCForceUpdateAlert {
     public static let sharedSDK = ForceUpdate.TCForceUpdateAlert()
-    public var forceUpdateModel: ForceUpdateVersionModel?
+    private var bundleID: String = ""
+    private var appCurrentVersion: String?
+    private var appRedirectionURL: String = ""
     private var elapsedDays: Double = 0.0
     private var isSoftNudgeDisplay: Bool = false
-    private var appCurrentVersion: String?
+    private var isRegularUpdate: Bool = false
+    private var popUpTimeStamp: TimeInterval?
+    public var forceUpdateModel: ForceUpdateVersionModel?
+    private var updateTypeDetermined: ForceUpdateType = .na
     
-    /// Check if updates are available
+    /// Set up framework with required data
     /// - Parameters:
-    ///   - bundleId: app bundleId
-    ///   - currentVersion: current App version
-    ///   - completion: to determine type to update based on flag
-    public func appUpdateAvailable(
-        bundleId: String,
-        currentVersion: String,
-        completion: @escaping (Bool?, Error?) -> Void
-    ) {
-        let appStoreUrl = "http://itunes.apple.com/lookup?bundleId=\(bundleId)"
+    ///   - updateModel: data model to determine update types
+    ///   - bundleId: bundleId to determine availability of new version
+    ///   - currentVersion: currentVersion app version installed
+    ///   - timeStamp: timeStamp of last softNudge or regularUpdate
+    ///   - updateURL: updateURL to redirect to AppStore
+    public func buildFrameWork(updateModel: ForceUpdateVersionModel, bundleId: String, currentVersion: String, timeStamp: TimeInterval?, updateURL: String) {
+        forceUpdateModel = updateModel
+        bundleID = bundleId
         appCurrentVersion = currentVersion
+        popUpTimeStamp = timeStamp
+        appRedirectionURL = updateURL
+    }
+    
+    /// Determine availability of new version in AppStore
+    public func appUpdateAvailable() {
+        let appStoreUrl = "http://itunes.apple.com/lookup?bundleId=\(bundleID)"
         if let appUrl = URL(string: appStoreUrl) {
             let request = URLRequest(url: appUrl, cachePolicy: .reloadIgnoringLocalCacheData)
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    if let result = (json["results"] as? [Any])?.first as? [String: Any],
-                        let latestVersion = result["version"] as? String {
-                        completion(currentVersion != latestVersion, nil)
+            let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+                guard let self = self else { return }
+                if let data = data,
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let result = (json["results"] as? [Any])?.first as? [String: Any],
+                   let latestVersion = result["version"] as? String {
+                    if self.appCurrentVersion != latestVersion {
+                        self.determineRegularUpdate()
+                    } else {
+                        UserDefaults.standard.set(nil, forKey: TCForceUpdateAlertConstant.timeStampDefaultsKey)
                     }
-                } else {
-                    completion(false, error)
                 }
             }
             task.resume()
         }
     }
     
-    
-    /// Determine the type of Update
-    /// - Parameters:
-    ///   - updateModel: data to configure and determine alert
-    ///   - currentVersion: current App version
-    ///   - timeStamp: previously viewed time should be in 'timeIntervalSince1970'
-    /// - Returns: update type
-    public func determineForceUpdate(
-        updateModel: ForceUpdateVersionModel,
-        timeStamp: TimeInterval?
-    ) -> ForceUpdateType {
-        forceUpdateModel = updateModel
-        
+    /// Determine softNudge or forceUpdate
+    public func determineForceUpdate() {
         let forceUpdateVersions = forceUpdateModel?.forceUpdate.version
         let softNudges = forceUpdateModel?.flexibleUpdate.version
         let currentTime = Date().timeIntervalSince1970
         
-        if let timeStamp = timeStamp {
+        if let timeStamp = popUpTimeStamp {
             elapsedDays = Double((currentTime - timeStamp)/86400)
-            isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? 0.0) < elapsedDays
+            // Default interval in case of network failure; softNudge : 2 days
+            isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? 2.0) < elapsedDays
         } else {
             isSoftNudgeDisplay = true
         }
         if (forceUpdateVersions?.contains(appCurrentVersion ?? "") ?? false) {
-            return .forceUpdate
+            updateTypeDetermined = .forceUpdate
         } else if (softNudges?.contains(appCurrentVersion ?? "") ?? false), isSoftNudgeDisplay {
-            return .softNudge
+            updateTypeDetermined = .softNudge
         } else {
-            return .na
+            return
+        }
+        showForceUpdateAlert(updateType: updateTypeDetermined)
+    }
+    
+    /// Determine regular update
+    private func determineRegularUpdate() {
+        let currentTime = Date().timeIntervalSince1970
+        if let timeStamp = popUpTimeStamp {
+            elapsedDays = Double((currentTime - timeStamp)/86400)
+            // Default interval in case of network failure; regularUpdate : 7 days
+            isRegularUpdate = (forceUpdateModel?.regularUpdate.recurrenceInterval ?? 7.0) < elapsedDays
+        } else {
+            isRegularUpdate = true
+        }
+        if isRegularUpdate {
+            showForceUpdateAlert(updateType: .regularUpdate)
         }
     }
     
-    /// Alert ViewController for updates
-    /// - Parameters:
-    ///   - updateURL: AppStore URL
-    ///   - updateType: updateType to configure View
-    /// - Returns: UIAlertController
-    public func showForceUpdateAlert(
-        updateURL: String,
-        updateType: ForceUpdateType
-    ) -> UIAlertController {
+    /// Show Update pop up based on updateType
+    /// - Parameter updateType: type of update determined
+    private func showForceUpdateAlert(updateType: ForceUpdateType) {
         let alertConfig = configureTitleDescription(updateType: updateType)
         let alert = UIAlertController(title: alertConfig.0 , message: alertConfig.1, preferredStyle: .alert)
-        if updateType == .softNudge {
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        if updateType == .softNudge || updateType == .regularUpdate {
+            let timeStampString = Date().timeIntervalSince1970
+            UserDefaults.standard.set(timeStampString, forKey: TCForceUpdateAlertConstant.timeStampDefaultsKey)
+            alert.addAction(UIAlertAction(title: TCForceUpdateAlertConstant.cancel, style: .cancel))
         }
-        alert.addAction(UIAlertAction(title: "Update", style: .default, handler: { _ in
-            if let appURL = URL(string: updateURL) {
+        alert.addAction(UIAlertAction(title: TCForceUpdateAlertConstant.update, style: .default, handler: { [weak self]_ in
+            guard let self = self else { return }
+            if let appURL = URL(string: self.appRedirectionURL) {
                 UIApplication.shared.open(appURL)
             }
         }))
-        return alert
+        
+        var rootVC = UIApplication.shared.windows.first?.rootViewController
+        DispatchQueue.main.async {
+            rootVC?.present(alert, animated: true)
+        }
     }
     
-    private func configureTitleDescription(updateType: ForceUpdateType) -> (String?, String?) {
-        var title: String?
-        var description: String?
+    /// Text configuration of alert pop up
+    /// - Parameter updateType: type of update determined
+    /// - Returns: title and description
+    private func configureTitleDescription(updateType: ForceUpdateType) -> (String, String) {
+        var title: String = ""
+        var description: String = ""
         switch updateType {
         case .forceUpdate:
-            title = forceUpdateModel?.forceUpdate.title
-            description = forceUpdateModel?.forceUpdate.description
+            title = forceUpdateModel?.forceUpdate.title ?? TCForceUpdateAlertConstant.title
+            description = forceUpdateModel?.forceUpdate.description ?? TCForceUpdateAlertConstant.description
         case .softNudge:
-            title = forceUpdateModel?.flexibleUpdate.title
-            description = forceUpdateModel?.flexibleUpdate.description
+            title = forceUpdateModel?.flexibleUpdate.title ?? TCForceUpdateAlertConstant.title
+            description = forceUpdateModel?.flexibleUpdate.description ?? TCForceUpdateAlertConstant.description
         case .na:
             break
+        case .regularUpdate:
+            title = forceUpdateModel?.regularUpdate.title ?? TCForceUpdateAlertConstant.title
+            description = forceUpdateModel?.regularUpdate.description ?? TCForceUpdateAlertConstant.description
         }
         return (title, description)
     }

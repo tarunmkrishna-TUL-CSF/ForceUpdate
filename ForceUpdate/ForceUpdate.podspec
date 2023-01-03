@@ -13,4 +13,5 @@
   spec.source_files  = "ForceUpdate/**/*.{swift}"
   spec.swift_versions = "5.0"
   spec.framework      = 'UIKit'
+  spec.ios.deployment_target  = '14.0'
 end

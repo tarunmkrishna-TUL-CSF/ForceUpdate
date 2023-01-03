@@ -14,7 +14,7 @@ public enum ForceUpdateType {
     case na
 }
 
-struct TCForceUpdateAlertConstant {
+enum Constants {
     static let title = "Please Update your app."
     static let description = "Critical update has been released."
     static let cancel = "Cancel"
@@ -22,140 +22,186 @@ struct TCForceUpdateAlertConstant {
     static let timeStampDefaultsKey = "nudgesTimeStamp"
     static let results = "results"
     static let version = "version"
-    
-    struct FallBackValues {
-        static let softNudgeTwoDays = 2.0
-        static let regularUpdateSevenDays = 7.0
-    }
+    static let appStoreEndPoint = "http://itunes.apple.com/lookup?bundleId="
+    static let middleLayerEndPoint = "/otatacliq/getApplicationProperties.json?propertyNames="
+}
+
+enum FallBackValues {
+    static let softNudgeTwoDays = 2.0
+    static let regularUpdateSevenDays = 7.0
 }
 
 public class TCForceUpdateAlert {
-    public static let sharedSDK = ForceUpdate.TCForceUpdateAlert()
+    public static let shared = ForceUpdate.TCForceUpdateAlert()
     private var bundleID: String = ""
     private var appCurrentVersion: String?
     private var appRedirectionURL: String = ""
+    private var updatePropertyName: String?
+    private var baseUrl: String?
     private var elapsedDays: Double = 0.0
     private var isSoftNudgeDisplay: Bool = false
     private var isRegularUpdate: Bool = false
     private var popUpTimeStamp: TimeInterval?
+    private let networkManager: NetworkCallManager = NetworkCallManager()
     public var forceUpdateModel: ForceUpdateVersionModel?
     private var updateTypeDetermined: ForceUpdateType = .na
     
     /// Set up framework with required data
     /// - Parameters:
-    ///   - updateModel: data model to determine update types
     ///   - bundleId: bundleId to determine availability of new version
     ///   - currentVersion: currentVersion app version installed
-    ///   - timeStamp: timeStamp of last softNudge or regularUpdate
-    ///   - updateURL: updateURL to redirect to AppStore
-    public func buildFrameWork(updateModel: ForceUpdateVersionModel, bundleId: String, currentVersion: String, timeStamp: TimeInterval?, updateURL: String) {
-        forceUpdateModel = updateModel
+    ///   - appStoreRedirectionURL: updateURL to redirect to AppStore
+    ///   - baseMiddleLayerURL: baseMiddleLayerURL endpoint
+    ///   - middleLayerPropertyName: middleLayerPropertyName parameter value for baseMiddleLayerURL
+    public func buildFrameWork(
+        bundleId: String,
+        currentVersion: String,
+        appStoreRedirectionURL: String,
+        baseMiddleLayerURL: String,
+        middleLayerPropertyName: String
+    ) {
         bundleID = bundleId
+        baseUrl = baseMiddleLayerURL
         appCurrentVersion = currentVersion
-        popUpTimeStamp = timeStamp
-        appRedirectionURL = updateURL
+        appRedirectionURL = appStoreRedirectionURL
+        updatePropertyName = middleLayerPropertyName
+        popUpTimeStamp = UserDefaults.standard.value(forKey: Constants.timeStampDefaultsKey) as? TimeInterval
+        getUpdateProperties()
+    }
+    
+    /// MiddleLayer call to get Properties to determine Alert type
+    private func getUpdateProperties() {
+        let apiEndPoint = "\(baseUrl ?? "")\(Constants.middleLayerEndPoint)\(updatePropertyName ?? "")"
+        networkManager.makeServerRequest(with: apiEndPoint) { [weak self] data, _, _ in
+            guard let self = self else { return }
+            if let data = data, let json = try? JSONDecoder().decode(ForceUpdateVersionModel.self, from: data) {
+                self.forceUpdateModel = json
+            }
+            self.determineUpdateType()
+        }
     }
     
     /// Determine availability of new version in AppStore
-    public func appUpdateAvailable() {
-        let appStoreUrl = "http://itunes.apple.com/lookup?bundleId=\(bundleID)"
-        if let appUrl = URL(string: appStoreUrl) {
-            let request = URLRequest(url: appUrl, cachePolicy: .reloadIgnoringLocalCacheData)
-            let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-                guard let self = self else { return }
-                if let data = data,
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let result = (json[TCForceUpdateAlertConstant.results] as? [Any])?.first as? [String: Any],
-                   let latestVersion = result[TCForceUpdateAlertConstant.version] as? String {
-                    if self.appCurrentVersion != latestVersion {
-                        self.determineRegularUpdate()
-                    } else {
-                        UserDefaults.standard.set(nil, forKey: TCForceUpdateAlertConstant.timeStampDefaultsKey)
-                    }
+    private func appUpdateAvailable() {
+        let appStoreUrl = "\(Constants.appStoreEndPoint)\(bundleID)"
+        networkManager.makeServerRequest(with: appStoreUrl) { [weak self] data, response, error in
+            guard let self = self else { return }
+            if let data = data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let result = (json[Constants.results] as? [Any])?.first as? [String: Any],
+               let latestVersion = result[Constants.version] as? Double {
+                if Double(self.appCurrentVersion ?? "0.0") ?? 0.0 < latestVersion {
+                    self.determineRegularUpdate()
+                } else {
+                    UserDefaults.standard.set(nil, forKey: Constants.timeStampDefaultsKey)
                 }
             }
-            task.resume()
         }
     }
     
     /// Determine softNudge or forceUpdate
-    public func determineForceUpdate() {
+    private func determineUpdateType() {
         let forceUpdateVersions = forceUpdateModel?.forceUpdate.version
         let softNudges = forceUpdateModel?.flexibleUpdate.version
-        let currentTime = Date().timeIntervalSince1970
+        isSoftNudgeDisplay = isTimeIntervalExceeded(updateType: .softNudge)
         
-        if let timeStamp = popUpTimeStamp {
-            elapsedDays = Double((currentTime - timeStamp)/86400)
-            // Default interval in case of network failure; softNudge : 2 days
-            isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? TCForceUpdateAlertConstant.FallBackValues.softNudgeTwoDays) < elapsedDays
-        } else {
-            isSoftNudgeDisplay = true
-        }
         if (forceUpdateVersions?.contains(appCurrentVersion ?? "") ?? false) {
             updateTypeDetermined = .forceUpdate
         } else if (softNudges?.contains(appCurrentVersion ?? "") ?? false), isSoftNudgeDisplay {
             updateTypeDetermined = .softNudge
         } else {
+            appUpdateAvailable()
             return
         }
-        showForceUpdateAlert(updateType: updateTypeDetermined)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.showUpdateAlert(updateType: self.updateTypeDetermined)
+        }
     }
     
     /// Determine regular update
     private func determineRegularUpdate() {
+        isRegularUpdate = isTimeIntervalExceeded(updateType: .regularUpdate)
+        if isRegularUpdate {
+            DispatchQueue.main.async {
+                [weak self] in
+                    guard let self = self else { return }
+                self.showUpdateAlert(updateType: .regularUpdate)
+            }
+        }
+    }
+    
+    /// Condition to show SoftNudges or Regular update
+    /// - Parameter updateType: type of update determined
+    /// - Returns: bool to show alert
+    private func isTimeIntervalExceeded(updateType: ForceUpdateType) -> Bool {
         let currentTime = Date().timeIntervalSince1970
         if let timeStamp = popUpTimeStamp {
             elapsedDays = Double((currentTime - timeStamp)/86400)
-            // Default interval in case of network failure; regularUpdate : 7 days
-            isRegularUpdate = (forceUpdateModel?.regularUpdate.recurrenceInterval ?? TCForceUpdateAlertConstant.FallBackValues.regularUpdateSevenDays) < elapsedDays
+            if updateType == .regularUpdate {
+                // Default interval in case of network failure; regularUpdate : 7 days
+                return (forceUpdateModel?.regularUpdate.recurrenceInterval ?? FallBackValues.regularUpdateSevenDays) < elapsedDays
+            } else {
+                // Default interval in case of network failure; softNudge : 2 days
+                return (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? FallBackValues.softNudgeTwoDays) < elapsedDays
+            }
         } else {
-            isRegularUpdate = true
-        }
-        if isRegularUpdate {
-            showForceUpdateAlert(updateType: .regularUpdate)
+            return true
         }
     }
     
     /// Show Update pop up based on updateType
     /// - Parameter updateType: type of update determined
-    private func showForceUpdateAlert(updateType: ForceUpdateType) {
-        let alertConfig = configureTitleDescription(updateType: updateType)
+    private func showUpdateAlert(updateType: ForceUpdateType) {
+        let alertConfig = alertInfo(updateType: updateType)
         let alert = UIAlertController(title: alertConfig.0 , message: alertConfig.1, preferredStyle: .alert)
         if updateType == .softNudge || updateType == .regularUpdate {
             let timeStampString = Date().timeIntervalSince1970
-            UserDefaults.standard.set(timeStampString, forKey: TCForceUpdateAlertConstant.timeStampDefaultsKey)
-            alert.addAction(UIAlertAction(title: TCForceUpdateAlertConstant.cancel, style: .cancel))
+            UserDefaults.standard.set(timeStampString, forKey: Constants.timeStampDefaultsKey)
+            alert.addAction(UIAlertAction(title: Constants.cancel, style: .cancel))
         }
-        alert.addAction(UIAlertAction(title: TCForceUpdateAlertConstant.update, style: .default, handler: { [weak self]_ in
+        alert.addAction(UIAlertAction(title: Constants.update, style: .default, handler: { [weak self]_ in
             guard let self = self, let appURL = URL(string: self.appRedirectionURL) else { return }
             UIApplication.shared.open(appURL)
         }))
         
         let rootVC = UIApplication.shared.windows.first?.rootViewController
-        DispatchQueue.main.async {
-            rootVC?.present(alert, animated: true)
-        }
+        rootVC?.present(alert, animated: true)
     }
     
     /// Text configuration of alert pop up
     /// - Parameter updateType: type of update determined
     /// - Returns: title and description
-    private func configureTitleDescription(updateType: ForceUpdateType) -> (String, String) {
-        var title: String = ""
-        var description: String = ""
+    private func alertInfo(updateType: ForceUpdateType) -> (title: String, description: String) {
+        let title: String
+        let description: String
         switch updateType {
         case .forceUpdate:
-            title = forceUpdateModel?.forceUpdate.title ?? TCForceUpdateAlertConstant.title
-            description = forceUpdateModel?.forceUpdate.description ?? TCForceUpdateAlertConstant.description
+            title = forceUpdateModel?.forceUpdate.title ?? Constants.title
+            description = forceUpdateModel?.forceUpdate.description ?? Constants.description
         case .softNudge:
-            title = forceUpdateModel?.flexibleUpdate.title ?? TCForceUpdateAlertConstant.title
-            description = forceUpdateModel?.flexibleUpdate.description ?? TCForceUpdateAlertConstant.description
+            title = forceUpdateModel?.flexibleUpdate.title ?? Constants.title
+            description = forceUpdateModel?.flexibleUpdate.description ?? Constants.description
         case .na:
-            break
+            title = ""
+            description = ""
         case .regularUpdate:
-            title = forceUpdateModel?.regularUpdate.title ?? TCForceUpdateAlertConstant.title
-            description = forceUpdateModel?.regularUpdate.description ?? TCForceUpdateAlertConstant.description
+            title = forceUpdateModel?.regularUpdate.title ?? Constants.title
+            description = forceUpdateModel?.regularUpdate.description ?? Constants.description
         }
         return (title, description)
+    }
+}
+
+
+private class NetworkCallManager {
+    public func makeServerRequest(with endPoint: String?, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Swift.Void) {
+        if let urlString = endPoint, let networkURL = URL(string: urlString) {
+            let request = URLRequest(url: networkURL, cachePolicy: .reloadIgnoringLocalCacheData)
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                completionHandler(data, response, error)
+            }
+            task.resume()
+        }
     }
 }

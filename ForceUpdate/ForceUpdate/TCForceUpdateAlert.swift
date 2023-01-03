@@ -20,6 +20,13 @@ struct TCForceUpdateAlertConstant {
     static let cancel = "Cancel"
     static let update = "Update"
     static let timeStampDefaultsKey = "nudgesTimeStamp"
+    static let results = "results"
+    static let version = "version"
+    
+    struct FallBackValues {
+        static let softNudgeTwoDays = 2.0
+        static let regularUpdateSevenDays = 7.0
+    }
 }
 
 public class TCForceUpdateAlert {
@@ -58,8 +65,8 @@ public class TCForceUpdateAlert {
                 guard let self = self else { return }
                 if let data = data,
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let result = (json["results"] as? [Any])?.first as? [String: Any],
-                   let latestVersion = result["version"] as? String {
+                   let result = (json[TCForceUpdateAlertConstant.results] as? [Any])?.first as? [String: Any],
+                   let latestVersion = result[TCForceUpdateAlertConstant.version] as? String {
                     if self.appCurrentVersion != latestVersion {
                         self.determineRegularUpdate()
                     } else {
@@ -80,7 +87,7 @@ public class TCForceUpdateAlert {
         if let timeStamp = popUpTimeStamp {
             elapsedDays = Double((currentTime - timeStamp)/86400)
             // Default interval in case of network failure; softNudge : 2 days
-            isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? 2.0) < elapsedDays
+            isSoftNudgeDisplay = (forceUpdateModel?.flexibleUpdate.recurrenceInterval ?? TCForceUpdateAlertConstant.FallBackValues.softNudgeTwoDays) < elapsedDays
         } else {
             isSoftNudgeDisplay = true
         }
@@ -100,7 +107,7 @@ public class TCForceUpdateAlert {
         if let timeStamp = popUpTimeStamp {
             elapsedDays = Double((currentTime - timeStamp)/86400)
             // Default interval in case of network failure; regularUpdate : 7 days
-            isRegularUpdate = (forceUpdateModel?.regularUpdate.recurrenceInterval ?? 7.0) < elapsedDays
+            isRegularUpdate = (forceUpdateModel?.regularUpdate.recurrenceInterval ?? TCForceUpdateAlertConstant.FallBackValues.regularUpdateSevenDays) < elapsedDays
         } else {
             isRegularUpdate = true
         }
@@ -120,10 +127,8 @@ public class TCForceUpdateAlert {
             alert.addAction(UIAlertAction(title: TCForceUpdateAlertConstant.cancel, style: .cancel))
         }
         alert.addAction(UIAlertAction(title: TCForceUpdateAlertConstant.update, style: .default, handler: { [weak self]_ in
-            guard let self = self else { return }
-            if let appURL = URL(string: self.appRedirectionURL) {
-                UIApplication.shared.open(appURL)
-            }
+            guard let self = self, let appURL = URL(string: self.appRedirectionURL) else { return }
+            UIApplication.shared.open(appURL)
         }))
         
         let rootVC = UIApplication.shared.windows.first?.rootViewController
